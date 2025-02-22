@@ -3,29 +3,26 @@ import { nanoid } from 'nanoid';
 
 const STORAGE_KEY = 'form_builder_forms';
 
-const getRandomDelay = () => Math.floor(Math.random() * 2000) + 1000; // 1-3 seconds
-const shouldFail = () => Math.random() < 0.1; // 10% chance of failure
+const getRandomDelay = () => Math.floor(Math.random() * 500) + 500; // 0.5-1 second delay
 
 export const formService = {
   async saveForm(form: Omit<Form, 'id' | 'createdAt' | 'updatedAt'>): Promise<Form> {
     return new Promise((resolve, reject) => {
       setTimeout(() => {
-        if (shouldFail()) {
+        try {
+          const newForm: Form = {
+            ...form,
+            id: nanoid(),
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          };
+
+          localStorage.setItem(STORAGE_KEY, JSON.stringify([newForm]));
+          resolve(newForm);
+        } catch (error) {
+          console.error('Failed to save form:', error);
           reject(new Error('Failed to save form'));
-          return;
         }
-
-        const forms = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-        const newForm: Form = {
-          ...form,
-          id: nanoid(),
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        };
-
-        forms.push(newForm);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(forms));
-        resolve(newForm);
       }, getRandomDelay());
     });
   },
@@ -33,27 +30,18 @@ export const formService = {
   async updateForm(form: Form): Promise<Form> {
     return new Promise((resolve, reject) => {
       setTimeout(() => {
-        if (shouldFail()) {
+        try {
+          const updatedForm = {
+            ...form,
+            updatedAt: Date.now(),
+          };
+
+          localStorage.setItem(STORAGE_KEY, JSON.stringify([updatedForm]));
+          resolve(updatedForm);
+        } catch (error) {
+          console.error('Failed to update form:', error);
           reject(new Error('Failed to update form'));
-          return;
         }
-
-        const forms = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-        const index = forms.findIndex((f: Form) => f.id === form.id);
-        
-        if (index === -1) {
-          reject(new Error('Form not found'));
-          return;
-        }
-
-        const updatedForm = {
-          ...form,
-          updatedAt: Date.now(),
-        };
-
-        forms[index] = updatedForm;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(forms));
-        resolve(updatedForm);
       }, getRandomDelay());
     });
   },
@@ -61,29 +49,36 @@ export const formService = {
   async saveQuestion(formId: string, question: Omit<Question, 'id'>): Promise<Question> {
     return new Promise((resolve, reject) => {
       setTimeout(() => {
-        if (shouldFail()) {
+        try {
+          const forms = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+          const form = forms.find((f: Form) => f.id === formId);
+          
+          if (!form) {
+            reject(new Error('Form not found'));
+            return;
+          }
+
+          const newQuestion: Question = {
+            ...question,
+            id: nanoid(),
+          };
+
+          const updatedForm = {
+            ...form,
+            questions: [...form.questions, newQuestion],
+            updatedAt: Date.now(),
+          };
+          
+          const updatedForms = forms.map((f: Form) => 
+            f.id === formId ? updatedForm : f
+          );
+          
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedForms));
+          resolve(newQuestion);
+        } catch (error) {
+          console.error('Failed to save question:', error);
           reject(new Error('Failed to save question'));
-          return;
         }
-
-        const forms = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-        const formIndex = forms.findIndex((f: Form) => f.id === formId);
-        
-        if (formIndex === -1) {
-          reject(new Error('Form not found'));
-          return;
-        }
-
-        const newQuestion: Question = {
-          ...question,
-          id: nanoid(),
-        };
-
-        forms[formIndex].questions.push(newQuestion);
-        forms[formIndex].updatedAt = Date.now();
-        
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(forms));
-        resolve(newQuestion);
       }, getRandomDelay());
     });
   },
@@ -91,34 +86,34 @@ export const formService = {
   async getForms(): Promise<Form[]> {
     return new Promise((resolve, reject) => {
       setTimeout(() => {
-        if (shouldFail()) {
+        try {
+          const forms = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+          resolve(forms);
+        } catch (error) {
+          console.error('Failed to fetch forms:', error);
           reject(new Error('Failed to fetch forms'));
-          return;
         }
-
-        const forms = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-        resolve(forms);
       }, getRandomDelay());
     });
   },
 
-  async getForm(id: string): Promise<Form> {
+  async getForm(): Promise<Form> {
     return new Promise((resolve, reject) => {
       setTimeout(() => {
-        if (shouldFail()) {
+        try {
+          const forms = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+          const form = forms[0];
+          
+          if (!form) {
+            reject(new Error('Form not found'));
+            return;
+          }
+
+          resolve(form);
+        } catch (error) {
+          console.error('Failed to fetch form:', error);
           reject(new Error('Failed to fetch form'));
-          return;
         }
-
-        const forms = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-        const form = forms.find((f: Form) => f.id === id);
-        
-        if (!form) {
-          reject(new Error('Form not found'));
-          return;
-        }
-
-        resolve(form);
       }, getRandomDelay());
     });
   },

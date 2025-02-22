@@ -1,11 +1,10 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Button,
   Container,
   VStack,
   useToast,
-  Input,
   Spinner,
   HStack,
   Text,
@@ -21,30 +20,72 @@ interface FormBuilderProps {
   onSave?: (form: Form) => void;
 }
 
+const isQuestionValid = (question: Question): boolean => {
+  // Check if question has a valid title
+  if (!question.label?.trim()) {
+    return false;
+  }
+  
+  // Check if question has a valid type
+  if (!question.type) {
+    return false;
+  }
+
+  // For number type questions, validate min/max
+  if (question.type === 'number' && 
+      question.validation?.min !== undefined && 
+      question.validation?.max !== undefined) {
+    if (question.validation.min > question.validation.max) {
+      return false;
+    }
+  }
+
+  return true;
+};
+
 export const FormBuilder: React.FC<FormBuilderProps> = ({
   initialForm,
   onSave,
 }) => {
-  const [form, setForm] = useState<Form>(() => initialForm || {
-    id: nanoid(),
-    title: 'New Form',
-    questions: [],
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  });
+  const [form, setForm] = useState<Form | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout>();
   const [expandedQuestionId, setExpandedQuestionId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (initialForm) {
-      setForm(initialForm);
-    }
-  }, [initialForm]);
+    const initializeForm = async () => {
+      if (initialForm) {
+        setForm(initialForm);
+      } else {
+        // Create and save a new form
+        const newForm = {
+          id: nanoid(),
+          title: '',
+          questions: [],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+        try {
+          const savedForm = await formService.saveForm(newForm);
+          setForm(savedForm);
+          onSave?.(savedForm);
+        } catch (error) {
+          toast({
+            title: 'Failed to create form',
+            description: error instanceof Error ? error.message : 'Unknown error',
+            status: 'error',
+            duration: 5000,
+            isClosable: true,
+          });
+        }
+      }
+    };
+
+    initializeForm();
+  }, [initialForm, onSave]);
 
   useEffect(() => {
-    // Cleanup timeout on unmount
     return () => {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
@@ -57,7 +98,7 @@ export const FormBuilder: React.FC<FormBuilderProps> = ({
   const saveForm = async (updatedForm: Form) => {
     setIsSaving(true);
     try {
-      const savedForm = await formService.saveForm(updatedForm);
+      const savedForm = await formService.updateForm(updatedForm);
       setForm(savedForm);
       onSave?.(savedForm);
       setLastSaved(new Date());
@@ -74,41 +115,29 @@ export const FormBuilder: React.FC<FormBuilderProps> = ({
     }
   };
 
-  const debouncedSave = useCallback((updatedForm: Form) => {
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-
-    saveTimeoutRef.current = setTimeout(() => {
-      saveForm(updatedForm);
-    }, 1000); // 1 second debounce
-  }, []);
-
-  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const updatedForm = {
-      ...form,
-      title: e.target.value,
-      updatedAt: Date.now(),
-    };
-    setForm(updatedForm);
-    debouncedSave(updatedForm);
-  };
-
   const handleQuestionUpdate = (updatedQuestion: Question) => {
+    if (!form) return;
+
     const updatedQuestions = form.questions.map((q) =>
       q.id === updatedQuestion.id ? updatedQuestion : q
     );
-    const updatedForm = { ...form, questions: updatedQuestions };
-    onSave?.(updatedForm);
+    const updatedForm = { ...form, questions: updatedQuestions, updatedAt: Date.now() };
+    setForm(updatedForm);
+    saveForm(updatedForm);
   };
 
   const handleQuestionDelete = (questionId: string) => {
+    if (!form) return;
+
     const updatedQuestions = form.questions.filter((q) => q.id !== questionId);
-    const updatedForm = { ...form, questions: updatedQuestions };
-    onSave?.(updatedForm);
+    const updatedForm = { ...form, questions: updatedQuestions, updatedAt: Date.now() };
+    setForm(updatedForm);
+    saveForm(updatedForm);
   };
 
-  const handleAddQuestion = () => {
+  const handleAddQuestion = async () => {
+    if (!form) return;
+
     const newQuestion: Question = {
       id: uuidv4(),
       type: 'text',
@@ -117,28 +146,48 @@ export const FormBuilder: React.FC<FormBuilderProps> = ({
         required: false,
       },
     };
-    const updatedForm = {
-      ...form,
-      questions: [...form.questions, newQuestion],
-    };
-    onSave?.(updatedForm);
-    setExpandedQuestionId(newQuestion.id);
+
+    try {
+      const savedQuestion = await formService.saveQuestion(form.id, newQuestion);
+      const updatedForm = {
+        ...form,
+        questions: [...form.questions, savedQuestion],
+        updatedAt: Date.now(),
+      };
+      setForm(updatedForm);
+      onSave?.(updatedForm);
+      setExpandedQuestionId(savedQuestion.id);
+    } catch (error) {
+      toast({
+        title: 'Failed to add question',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    }
   };
+
+  const getValidQuestions = () => {
+    if (!form) return [];
+    return form.questions.filter(isQuestionValid);
+  };
+
+  if (!form) {
+    return (
+      <Container maxW="container.lg" py={8}>
+        <VStack spacing={4} align="center">
+          <Spinner size="xl" />
+          <Text>Initializing form...</Text>
+        </VStack>
+      </Container>
+    );
+  }
 
   return (
     <Container maxW="container.lg" py={8}>
       <VStack spacing={6} align="stretch">
         <Box position="relative">
-          <Input
-            value={form.title}
-            onChange={handleTitleChange}
-            fontSize="2xl"
-            fontWeight="bold"
-            variant="flushed"
-            placeholder="Enter form title"
-            size="lg"
-            mb={4}
-          />
           <HStack position="absolute" top={2} right={2} spacing={2}>
             {isSaving && (
               <>
@@ -177,6 +226,12 @@ export const FormBuilder: React.FC<FormBuilderProps> = ({
         <Button colorScheme="blue" onClick={handleAddQuestion}>
           Add Question
         </Button>
+
+        {form.questions.length > 0 && form.questions.length !== getValidQuestions().length && (
+          <Text color="red.500" fontSize="sm">
+            Some questions have errors and won't appear in the preview
+          </Text>
+        )}
       </VStack>
     </Container>
   );

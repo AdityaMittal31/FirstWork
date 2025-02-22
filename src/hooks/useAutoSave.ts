@@ -10,6 +10,7 @@ interface AutoSaveState {
 interface UseAutoSaveProps {
   formId: string;
   onUpdate: (question: Question) => void;
+  debounceMs?: number;
 }
 
 const validateQuestion = (question: Question): { isValid: boolean; error?: string } => {
@@ -28,28 +29,18 @@ const validateQuestion = (question: Question): { isValid: boolean; error?: strin
       }
       break;
     }
-    case 'select': {
-      if (!question.options || question.options.length === 0) {
-        return { isValid: false, error: 'Select questions must have at least one option' };
-      }
-      // Validate option values
-      const hasEmptyOptions = question.options.some(opt => !opt.label.trim() || !opt.value.trim());
-      if (hasEmptyOptions) {
-        return { isValid: false, error: 'All options must have both label and value' };
-      }
-      break;
-    }
   }
 
   return { isValid: true };
 };
 
-export const useAutoSave = ({ formId, onUpdate }: UseAutoSaveProps) => {
+export const useAutoSave = ({ formId, onUpdate, debounceMs = 1000 }: UseAutoSaveProps) => {
   const [state, setState] = useState<AutoSaveState>({
     isSaving: false,
     error: null,
   });
   const saveTimeoutRef = useRef<NodeJS.Timeout>();
+  const lastSavedValueRef = useRef<Question | null>(null);
 
   useEffect(() => {
     return () => {
@@ -60,24 +51,32 @@ export const useAutoSave = ({ formId, onUpdate }: UseAutoSaveProps) => {
   }, []);
 
   const debouncedSave = useCallback((updatedQuestion: Question) => {
+    // Update parent component
+    onUpdate(updatedQuestion);
+
+    // Clear any existing timeout
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
 
-    // Always update the parent component for immediate feedback
-    onUpdate(updatedQuestion);
-
-    // Validate before scheduling save
-    const validation = validateQuestion(updatedQuestion);
-    if (!validation.isValid) {
-      setState(prev => ({ ...prev, error: validation.error || 'Invalid question' }));
+    // Don't save if the value hasn't changed from the last saved value
+    if (lastSavedValueRef.current && 
+        JSON.stringify(lastSavedValueRef.current) === JSON.stringify(updatedQuestion)) {
       return;
     }
 
+    // Schedule the save
     saveTimeoutRef.current = setTimeout(async () => {
+      const validation = validateQuestion(updatedQuestion);
+      if (!validation.isValid) {
+        setState(prev => ({ ...prev, error: validation.error || 'Invalid question' }));
+        return;
+      }
+
       setState(prev => ({ ...prev, isSaving: true, error: null }));
       try {
         await formService.saveQuestion(formId, updatedQuestion);
+        lastSavedValueRef.current = updatedQuestion;
         setState(prev => ({
           ...prev,
           isSaving: false,
@@ -90,8 +89,8 @@ export const useAutoSave = ({ formId, onUpdate }: UseAutoSaveProps) => {
           error: error instanceof Error ? error.message : 'Failed to save',
         }));
       }
-    }, 1000);
-  }, [formId, onUpdate]);
+    }, debounceMs);
+  }, [formId, onUpdate, debounceMs]);
 
   return {
     ...state,

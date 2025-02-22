@@ -5,9 +5,7 @@ import {
   FormLabel,
   FormErrorMessage,
   Input,
-  Select,
   VStack,
-  Heading,
   useToast,
   Button,
 } from '@chakra-ui/react';
@@ -81,15 +79,6 @@ export const FormRenderer: React.FC<FormRendererProps> = ({ form, onSubmit }) =>
           break;
         }
 
-        case 'select': {
-          let selectSchema = z.string();
-          if (question.validation?.required) {
-            selectSchema = selectSchema.min(1, 'Please select an option');
-          }
-          schema[question.id] = selectSchema;
-          break;
-        }
-
         default:
           schema[question.id] = z.string();
       }
@@ -148,18 +137,6 @@ export const FormRenderer: React.FC<FormRendererProps> = ({ form, onSubmit }) =>
       case 'number':
         return <Input {...commonProps} type="number" />;
 
-      case 'select':
-        return (
-          <Select {...commonProps}>
-            <option value="">Select an option</option>
-            {question.options?.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
-        );
-
       default:
         return null;
     }
@@ -168,8 +145,6 @@ export const FormRenderer: React.FC<FormRendererProps> = ({ form, onSubmit }) =>
   return (
     <Container maxW="container.md" py={8}>
       <VStack spacing={6} align="stretch">
-        <Heading size="lg">{form.title}</Heading>
-
         <form onSubmit={handleSubmit(handleFormSubmit)}>
           <VStack spacing={4} align="stretch">
             {form.questions.map((question) => (

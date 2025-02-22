@@ -22,11 +22,6 @@ export const useFormValidation = (question: Question) => {
         if (validation.max !== undefined) schema = schema.max(validation.max, `Maximum value is ${validation.max}`);
         break;
 
-      case 'select':
-        schema = z.string();
-        if (validation.required) schema = schema.min(1, 'Please select an option');
-        break;
-
       default:
         schema = z.string();
     }

@@ -1,4 +1,4 @@
-export type QuestionType = 'text' | 'number' | 'select';
+export type QuestionType = 'text' | 'number' | null;
 
 export interface ValidationRule {
   required?: boolean;
@@ -7,12 +7,6 @@ export interface ValidationRule {
   min?: number;
   max?: number;
   pattern?: string;
-  isParagraph?: boolean;
-}
-
-export interface Option {
-  label: string;
-  value: string;
 }
 
 export interface Question {
@@ -21,7 +15,6 @@ export interface Question {
   label: string;
   placeholder?: string;
   validation?: ValidationRule;
-  options?: Option[];
   value?: string | number;
 }
 

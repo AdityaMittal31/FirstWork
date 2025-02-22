@@ -10,10 +10,33 @@ import {
 } from '@chakra-ui/react';
 import { FormBuilder } from './components/FormBuilder/FormBuilder';
 import { FormRenderer } from './components/FormRenderer/FormRenderer';
-import { Form } from './types/form';
+import { Form, Question } from './types/form';
 import { formService } from './services/formService';
 import { useEffect, useState } from 'react';
 import theme from './theme';
+
+const isQuestionValid = (question: Question): boolean => {
+  // Check if question has a valid title
+  if (!question.label?.trim()) {
+    return false;
+  }
+  
+  // Check if question has a valid type
+  if (!question.type) {
+    return false;
+  }
+
+  // For number type questions, validate min/max
+  if (question.type === 'number' && 
+      question.validation?.min !== undefined && 
+      question.validation?.max !== undefined) {
+    if (question.validation.min > question.validation.max) {
+      return false;
+    }
+  }
+
+  return true;
+};
 
 function App() {
   const [form, setForm] = useState<Form | null>(null);
@@ -51,6 +74,14 @@ function App() {
     setForm(savedForm);
   };
 
+  const getValidForm = (): Form | null => {
+    if (!form) return null;
+    return {
+      ...form,
+      questions: form.questions.filter(isQuestionValid)
+    };
+  };
+
   return (
     <ChakraProvider theme={theme}>
       <Box p={4}>
@@ -70,7 +101,7 @@ function App() {
             <TabPanel>
               {form && (
                 <FormRenderer
-                  form={form}
+                  form={getValidForm() || { ...form, questions: [] }}
                   onSubmit={handleFormSubmit}
                 />
               )}

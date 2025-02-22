@@ -11,5 +11,20 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('zod')) {
+              return 'zod';
+            }
+            return 'vendor';
+          }
+        }
+      }
+    }
   },
+  optimizeDeps: {
+    include: ['zod']
+  }
 })
